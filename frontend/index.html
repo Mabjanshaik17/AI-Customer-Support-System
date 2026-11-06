@@ -1,0 +1,173 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SupportAI | Customer Support Dashboard</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f3f5fa;color:#202b3c}
+header{background:#17243b;color:white;padding:20px 5%;display:flex;justify-content:space-between;align-items:center}
+header h2{margin:0}
+header span{color:#a9c7ff;font-size:13px}
+.container{max-width:1200px;margin:30px auto;padding:0 20px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:25px}
+.card,.panel{background:white;padding:22px;border-radius:12px;box-shadow:0 3px 14px #17243b0d}
+.stat-number{font-size:30px;font-weight:bold;margin-top:10px}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+h3{margin-top:0}
+label{display:block;margin:13px 0 6px;font-weight:bold;font-size:13px}
+input,textarea,select{width:100%;padding:11px;border:1px solid #dce1eb;border-radius:7px;font-size:14px}
+textarea{min-height:95px;resize:vertical}
+button{background:#315ee7;color:white;border:0;padding:11px 16px;border-radius:7px;cursor:pointer;font-weight:bold;margin-top:12px}
+button:hover{background:#234ac0}
+button.secondary{background:#52627a}
+button.small{padding:7px 10px;font-size:12px;margin:3px}
+.ticket{border:1px solid #e4e8f0;padding:14px;border-radius:9px;margin:12px 0}
+.ticket p{font-size:13px;color:#596579}
+.tag{font-size:11px;background:#edf1ff;padding:5px 8px;border-radius:20px;margin-right:5px}
+#message,#aiResult{margin-top:12px;font-size:14px;white-space:pre-wrap;line-height:1.6}
+#aiResult{background:#f1f5ff;padding:14px;border-radius:8px}
+.muted{color:#718096;font-size:13px}
+@media(max-width:750px){.layout,.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h2>✨ SupportAI</h2>
+<span>AI-Powered Customer Support System</span>
+</header>
+
+<div class="container">
+<h2>Customer Support Dashboard</h2>
+<p class="muted">Manage customer requests and generate intelligent response suggestions.</p>
+
+<div class="stats">
+<div class="card">Total Tickets<div class="stat-number" id="total">0</div></div>
+<div class="card">Open Tickets<div class="stat-number" id="open">0</div></div>
+<div class="card">Resolved Tickets<div class="stat-number" id="resolved">0</div></div>
+</div>
+
+<div class="layout">
+<section class="panel">
+<h3>Submit a Support Ticket</h3>
+<form id="ticketForm">
+<label>Customer Name</label>
+<input id="name" required minlength="2" placeholder="Enter your name">
+<label>Email</label>
+<input id="email" type="email" required placeholder="Enter your email">
+<label>Subject</label>
+<input id="subject" required minlength="3" placeholder="Ticket subject">
+<label>Describe your issue</label>
+<textarea id="description" required minlength="10" placeholder="Explain your issue..."></textarea>
+<button type="submit">Submit Ticket</button>
+</form>
+<div id="message"></div>
+</section>
+
+<section class="panel">
+<h3>AI Response Assistant</h3>
+<p class="muted">Select a ticket below and generate a suggested customer response using Gemini AI.</p>
+<label>Ticket ID</label>
+<input id="aiTicketId" type="number" min="1" placeholder="Enter ticket ID">
+<button onclick="generateAI()">Generate AI Response</button>
+<div id="aiResult">Your AI-generated response will appear here.</div>
+</section>
+</div>
+
+<section class="panel" style="margin-top:22px">
+<h3>All Support Tickets</h3>
+<button class="secondary" onclick="loadTickets()">Refresh Tickets</button>
+<div id="tickets">Loading tickets...</div>
+</section>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+async function loadTickets(){
+ const box=document.getElementById("tickets");
+ box.textContent="Loading...";
+ try{
+  const res=await fetch(API+"/tickets");
+  if(!res.ok) throw new Error("Could not load tickets");
+  const data=await res.json();
+  document.getElementById("total").textContent=data.length;
+  document.getElementById("open").textContent=data.filter(t=>t.status==="Open").length;
+  document.getElementById("resolved").textContent=data.filter(t=>t.status==="Resolved").length;
+  box.innerHTML="";
+  if(!data.length){box.textContent="No tickets found.";return}
+  data.forEach(t=>{
+   const div=document.createElement("div");
+   div.className="ticket";
+   const title=document.createElement("strong");
+   title.textContent="#"+t.id+" - "+t.subject;
+   const detail=document.createElement("p");
+   detail.textContent=t.customer_name+" | "+t.category+" | "+t.priority+" Priority";
+   const status=document.createElement("p");
+   status.textContent="Status: "+t.status;
+   const ai=document.createElement("button");
+   ai.className="small";
+   ai.textContent="Generate AI Reply";
+   ai.onclick=()=>{document.getElementById("aiTicketId").value=t.id;generateAI()};
+   const progress=document.createElement("button");
+   progress.className="small secondary";
+   progress.textContent="Mark In Progress";
+   progress.onclick=()=>updateStatus(t.id,"In Progress");
+   const resolve=document.createElement("button");
+   resolve.className="small secondary";
+   resolve.textContent="Resolve";
+   resolve.onclick=()=>updateStatus(t.id,"Resolved");
+   div.append(title,detail,status,ai,progress,resolve);
+   box.appendChild(div);
+  });
+ }catch(e){box.textContent="Error: "+e.message+" — Check that the backend is running."}
+}
+
+document.getElementById("ticketForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const msg=document.getElementById("message");
+ msg.textContent="Submitting...";
+ const payload={
+  customer_name:document.getElementById("name").value,
+  email:document.getElementById("email").value,
+  subject:document.getElementById("subject").value,
+  description:document.getElementById("description").value
+ };
+ try{
+  const res=await fetch(API+"/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.detail||"Submission failed");
+  msg.textContent="Ticket #"+data.id+" submitted successfully!";
+  e.target.reset();
+  loadTickets();
+ }catch(err){msg.textContent="Error: "+err.message+" — Check backend and browser connection."}
+});
+
+async function generateAI(){
+ const id=document.getElementById("aiTicketId").value;
+ const result=document.getElementById("aiResult");
+ if(!id){result.textContent="Please enter a ticket ID.";return}
+ result.textContent="Gemini AI is generating a response...";
+ try{
+  const res=await fetch(API+"/tickets/"+id+"/suggested-response",{method:"POST"});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.detail||"AI request failed");
+  result.textContent=data.suggested_response;
+ }catch(e){result.textContent="Error: "+e.message}
+}
+
+async function updateStatus(id,status){
+ try{
+  const res=await fetch(API+"/tickets/"+id+"/status",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.detail||"Update failed");
+  loadTickets();
+ }catch(e){alert("Status update failed: "+e.message)}
+}
+
+loadTickets();
+</script>
+</body>
+</html>
